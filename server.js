@@ -3,18 +3,18 @@ const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const pdfParse = require("pdf-parse"); // ✅ Corregido
+const pdfParse = require("pdf-parse").default || require("pdf-parse"); // ✅ corrección
 const ExcelJS = require("exceljs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Carpeta temporal para Render
+// Carpeta temporal
 const UPLOAD_DIR = "/tmp/uploads";
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// Configuración de multer
+// Configuración multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
@@ -31,7 +31,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
     // Leer PDF
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await pdfParse(dataBuffer); // ✅ Función correcta
+    const pdfData = await pdfParse(dataBuffer);
     const text = pdfData.text;
 
     // Procesar texto como tabla
@@ -72,19 +72,21 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     ];
     worksheet.addRows(data);
 
-    const excelFileName = path.basename(filePath).replace(".pdf", ".xlsx");
-    const excelPath = path.join(UPLOAD_DIR, excelFileName);
+    const excelPath = path.join(UPLOAD_DIR, path.basename(filePath).replace(".pdf", ".xlsx"));
     await workbook.xlsx.writeFile(excelPath);
 
     // Enviar respuesta
     res.json({
       message: "Archivo procesado",
       output: JSON.stringify(data),
-      file: `/uploads/${excelFileName}`, // ruta pública para descargar
+      file: excelPath,
     });
   } catch (err) {
     console.error("ERROR:", err);
-    res.status(500).json({ error: "Error procesando archivo", details: err.message });
+    res.status(500).json({ 
+      error: "Error procesando archivo", 
+      details: err.message 
+    });
   }
 });
 
