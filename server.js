@@ -33,16 +33,13 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     pdfExtract.extract(filePath, {}, async (err, data) => {
       if (err) {
         console.error("Error leyendo PDF:", err);
-        return res.status(500).json({
-          error: "Error procesando archivo",
-          details: err.message,
-        });
+        return res.status(500).json({ error: "Error procesando archivo", details: err.message });
       }
 
       // Extraer texto plano de todas las páginas
       const lines = [];
-      data.pages.forEach((page) => {
-        page.content.forEach((item) => {
+      data.pages.forEach(page => {
+        page.content.forEach(item => {
           if (item.str) lines.push(item.str.trim());
         });
       });
@@ -50,50 +47,41 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       console.log("Texto extraído:", lines);
 
       if (!lines.length) {
-        return res
-          .status(400)
-          .json({ error: "No se pudieron extraer datos del PDF" });
+        return res.status(400).json({ error: "No se pudieron extraer datos del PDF" });
       }
 
-      // Reconstruir líneas que corresponden a cada registro
-      const records = [];
-      let buffer = "";
-      lines.forEach((line) => {
-        if (/^\d/.test(line)) {
-          if (buffer) records.push(buffer);
-          buffer = line;
+      // --------------------------------------------------------
+      // Reconstruir las filas de la tabla
+      // --------------------------------------------------------
+      const dataRows = [];
+      let buffer = [];
+
+      for (let line of lines) {
+        // Si la línea es un número (Item), empieza un nuevo registro
+        if (/^\d+$/.test(line)) {
+          if (buffer.length) dataRows.push(buffer);
+          buffer = [line];
         } else {
-          buffer += " " + line;
+          buffer.push(line);
         }
-      });
-      if (buffer) records.push(buffer);
+      }
+      if (buffer.length) dataRows.push(buffer);
 
-      console.log("Líneas reconstruidas:", records);
+      // Convertir a objetos
+      const parsed = dataRows.map(parts => {
+        if (parts.length < 4) return null; // saltamos líneas incompletas
+        return {
+          Item: parseInt(parts[0]),
+          Codigo: parts[1],
+          Descripcion: parts.slice(2, -1).join(" "), // todo el texto intermedio
+          Valor: parseInt(parts[parts.length - 1].replace(/\./g, "")),
+        };
+      }).filter(Boolean);
 
-      // Parsear cada registro de forma flexible
-      const parsed = records
-        .map((line) => {
-          const numbers = line.match(/\d[\d\.]*/g);
-          if (!numbers || numbers.length < 2) return null;
-
-          const item = parseInt(numbers[0]);
-          const codigo = numbers[1];
-          const valor = parseInt(numbers[numbers.length - 1].replace(/\./g, ""));
-
-          let descripcion = line
-            .replace(numbers[0], "")
-            .replace(numbers[1], "")
-            .replace(numbers[numbers.length - 1], "")
-            .trim();
-
-          return { Item: item, Codigo: codigo, Descripcion: descripcion, Valor: valor };
-        })
-        .filter(Boolean);
+      console.log("Datos parseados:", parsed);
 
       if (!parsed.length) {
-        return res
-          .status(400)
-          .json({ error: "No se pudieron extraer datos válidos del PDF" });
+        return res.status(400).json({ error: "No se pudieron extraer datos válidos del PDF" });
       }
 
       // Crear Excel
@@ -107,10 +95,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       ];
       worksheet.addRows(parsed);
 
-      const excelPath = path.join(
-        UPLOAD_DIR,
-        path.basename(filePath).replace(".pdf", ".xlsx")
-      );
+      const excelPath = path.join(UPLOAD_DIR, path.basename(filePath).replace(".pdf", ".xlsx"));
       await workbook.xlsx.writeFile(excelPath);
 
       // Enviar respuesta
@@ -120,6 +105,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
         file: `/uploads/${path.basename(excelPath)}`,
       });
     });
+
   } catch (err) {
     console.error("ERROR:", err);
     res.status(500).json({ error: "Error procesando archivo", details: err.message });
