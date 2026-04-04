@@ -3,18 +3,18 @@ const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const PDFParser = require("pdf-parse");
+const pdfParse = require("pdf-parse"); // ✅ Corregido
 const ExcelJS = require("exceljs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Carpeta temporal
+// Carpeta temporal para Render
 const UPLOAD_DIR = "/tmp/uploads";
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-// Configuración multer
+// Configuración de multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
@@ -27,31 +27,18 @@ app.get("/", (req, res) => res.send("Servidor funcionando 🚀"));
 // Subir PDF y generar Excel
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
-    console.log("req.file:", req.file);
-    if (!req.file) {
-      console.error("No se recibió ningún archivo");
-      return res.status(400).json({ error: "No se recibió archivo" });
-    }
-
     const filePath = req.file.path;
-    console.log("Archivo recibido:", filePath);
 
     // Leer PDF
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await PDFParser(dataBuffer);
+    const pdfData = await pdfParse(dataBuffer); // ✅ Función correcta
     const text = pdfData.text;
-
-    if (!text) {
-      console.log("PDF vacío o no legible");
-      return res.status(400).json({ error: "PDF vacío o no legible" });
-    }
 
     // Procesar texto como tabla
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-    console.log("Número de líneas extraídas del PDF:", lines.length);
-
     const cleanLines = [];
     let buffer = "";
+
     for (const line of lines) {
       if (/^\d+\s+\d+/.test(line)) { // empieza con item + código
         if (buffer) cleanLines.push(buffer);
@@ -61,8 +48,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       }
     }
     if (buffer) cleanLines.push(buffer);
-
-    console.log("Número de líneas limpias:", cleanLines.length);
 
     // Convertir a objetos
     const data = cleanLines.map(line => {
@@ -76,8 +61,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       };
     }).filter(Boolean);
 
-    console.log("Número de registros procesados:", data.length);
-
     // Crear Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Facturas");
@@ -89,20 +72,18 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     ];
     worksheet.addRows(data);
 
-    const excelName = path.basename(filePath).replace(".pdf", ".xlsx");
-    const excelPath = path.join(UPLOAD_DIR, excelName);
+    const excelFileName = path.basename(filePath).replace(".pdf", ".xlsx");
+    const excelPath = path.join(UPLOAD_DIR, excelFileName);
     await workbook.xlsx.writeFile(excelPath);
-    console.log("Excel generado:", excelPath);
 
-    // Enviar respuesta con nombre de archivo para descargar
+    // Enviar respuesta
     res.json({
       message: "Archivo procesado",
       output: JSON.stringify(data),
-      file: `/uploads/${excelName}`, // ruta relativa para descargar
+      file: `/uploads/${excelFileName}`, // ruta pública para descargar
     });
   } catch (err) {
-    console.error("ERROR DETECTADO:", err);
-    // Devuelve también el mensaje real para depuración
+    console.error("ERROR:", err);
     res.status(500).json({ error: "Error procesando archivo", details: err.message });
   }
 });
