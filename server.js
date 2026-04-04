@@ -4,7 +4,8 @@ const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const pdfParse = require("pdf-parse"); // ✅ corregido
+const pdfParseLib = require("pdf-parse");
+const pdfParse = typeof pdfParseLib === "function" ? pdfParseLib : pdfParseLib.default;
 const ExcelJS = require("exceljs");
 
 const app = express();
