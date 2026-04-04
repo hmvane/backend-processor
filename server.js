@@ -33,37 +33,68 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     pdfExtract.extract(filePath, {}, async (err, data) => {
       if (err) {
         console.error("Error leyendo PDF:", err);
-        return res.status(500).json({ error: "Error procesando archivo", details: err.message });
+        return res.status(500).json({
+          error: "Error procesando archivo",
+          details: err.message,
+        });
       }
 
       // Extraer texto plano de todas las páginas
-      // Extraer texto plano de todas las páginas
-const lines = [];
-data.pages.forEach(page => {
-    page.content.forEach(item => {
-        if (item.str) {
-            lines.push(item.str);
-        }
-    });
-});
+      const lines = [];
+      data.pages.forEach((page) => {
+        page.content.forEach((item) => {
+          if (item.str) lines.push(item.str.trim());
+        });
+      });
 
-console.log("Texto extraído:", lines);
+      console.log("Texto extraído:", lines);
 
       if (!lines.length) {
-        return res.status(400).json({ error: "No se pudieron extraer datos del PDF" });
+        return res
+          .status(400)
+          .json({ error: "No se pudieron extraer datos del PDF" });
       }
 
-      // Convertir líneas en objetos
-      const parsed = lines.map(line => {
-        const match = line.match(/(\d+)\s+(\d+)\s+(.+?)\s+([\d\.]+)/);
-        if (!match) return null;
-        return {
-          Item: parseInt(match[1]),
-          Codigo: match[2],
-          Descripcion: match[3].trim(),
-          Valor: parseInt(match[4].replace(/\./g, "")),
-        };
-      }).filter(Boolean);
+      // Reconstruir líneas que corresponden a cada registro
+      const records = [];
+      let buffer = "";
+      lines.forEach((line) => {
+        if (/^\d/.test(line)) {
+          if (buffer) records.push(buffer);
+          buffer = line;
+        } else {
+          buffer += " " + line;
+        }
+      });
+      if (buffer) records.push(buffer);
+
+      console.log("Líneas reconstruidas:", records);
+
+      // Parsear cada registro de forma flexible
+      const parsed = records
+        .map((line) => {
+          const numbers = line.match(/\d[\d\.]*/g);
+          if (!numbers || numbers.length < 2) return null;
+
+          const item = parseInt(numbers[0]);
+          const codigo = numbers[1];
+          const valor = parseInt(numbers[numbers.length - 1].replace(/\./g, ""));
+
+          let descripcion = line
+            .replace(numbers[0], "")
+            .replace(numbers[1], "")
+            .replace(numbers[numbers.length - 1], "")
+            .trim();
+
+          return { Item: item, Codigo: codigo, Descripcion: descripcion, Valor: valor };
+        })
+        .filter(Boolean);
+
+      if (!parsed.length) {
+        return res
+          .status(400)
+          .json({ error: "No se pudieron extraer datos válidos del PDF" });
+      }
 
       // Crear Excel
       const workbook = new ExcelJS.Workbook();
@@ -76,7 +107,10 @@ console.log("Texto extraído:", lines);
       ];
       worksheet.addRows(parsed);
 
-      const excelPath = path.join(UPLOAD_DIR, path.basename(filePath).replace(".pdf", ".xlsx"));
+      const excelPath = path.join(
+        UPLOAD_DIR,
+        path.basename(filePath).replace(".pdf", ".xlsx")
+      );
       await workbook.xlsx.writeFile(excelPath);
 
       // Enviar respuesta
@@ -86,7 +120,6 @@ console.log("Texto extraído:", lines);
         file: `/uploads/${path.basename(excelPath)}`,
       });
     });
-
   } catch (err) {
     console.error("ERROR:", err);
     res.status(500).json({ error: "Error procesando archivo", details: err.message });
