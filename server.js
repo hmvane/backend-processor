@@ -27,8 +27,10 @@ app.get("/", (req, res) => res.send("Servidor funcionando 🚀"));
 // Subir PDF y generar Excel
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
+    console.log("req.file:", req.file);
     if (!req.file) {
-      return res.status(400).json({ error: "No se subió ningún archivo" });
+      console.error("No se recibió ningún archivo");
+      return res.status(400).json({ error: "No se recibió archivo" });
     }
 
     const filePath = req.file.path;
@@ -99,8 +101,9 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       file: `/uploads/${excelName}`, // ruta relativa para descargar
     });
   } catch (err) {
-    console.error("ERROR:", err);
-    res.status(500).json({ error: "Error procesando archivo" });
+    console.error("ERROR DETECTADO:", err);
+    // Devuelve también el mensaje real para depuración
+    res.status(500).json({ error: "Error procesando archivo", details: err.message });
   }
 });
 
