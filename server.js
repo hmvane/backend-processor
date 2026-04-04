@@ -4,7 +4,7 @@ const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const PDFParser = require("pdf-parse").default; // ⚡ corrección aquí
+const pdfParse = require("pdf-parse"); // ✅ corregido
 const ExcelJS = require("exceljs");
 
 const app = express();
@@ -34,7 +34,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
     // Leer PDF
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await PDFParser(dataBuffer);
+    const pdfData = await pdfParse(dataBuffer);
     const text = pdfData.text;
 
     // Procesar texto como tabla
@@ -78,11 +78,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const excelPath = path.join(UPLOAD_DIR, path.basename(filePath).replace(".pdf", ".xlsx"));
     await workbook.xlsx.writeFile(excelPath);
 
-    // Respuesta JSON con datos y link al Excel
+    // Enviar respuesta
     res.json({
       message: "Archivo procesado",
       output: JSON.stringify(data),
-      file: `/uploads/${path.basename(excelPath)}`,
+      file: excelPath, // path del Excel para descarga
     });
   } catch (err) {
     console.error("ERROR:", err);
