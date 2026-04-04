@@ -1,9 +1,10 @@
+// server.js
 const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const pdfParse = require("pdf-parse").default || require("pdf-parse"); // ✅ corrección
+const PDFParser = require("pdf-parse").default; // ⚡ corrección aquí
 const ExcelJS = require("exceljs");
 
 const app = express();
@@ -27,11 +28,13 @@ app.get("/", (req, res) => res.send("Servidor funcionando 🚀"));
 // Subir PDF y generar Excel
 app.post("/upload", upload.single("file"), async (req, res) => {
   try {
+    if (!req.file) return res.status(400).json({ error: "No se subió ningún archivo" });
+
     const filePath = req.file.path;
 
     // Leer PDF
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfData = await pdfParse(dataBuffer);
+    const pdfData = await PDFParser(dataBuffer);
     const text = pdfData.text;
 
     // Procesar texto como tabla
@@ -75,18 +78,15 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const excelPath = path.join(UPLOAD_DIR, path.basename(filePath).replace(".pdf", ".xlsx"));
     await workbook.xlsx.writeFile(excelPath);
 
-    // Enviar respuesta
+    // Respuesta JSON con datos y link al Excel
     res.json({
       message: "Archivo procesado",
       output: JSON.stringify(data),
-      file: excelPath,
+      file: `/uploads/${path.basename(excelPath)}`,
     });
   } catch (err) {
     console.error("ERROR:", err);
-    res.status(500).json({ 
-      error: "Error procesando archivo", 
-      details: err.message 
-    });
+    res.status(500).json({ error: "Error procesando archivo", details: err.message });
   }
 });
 
