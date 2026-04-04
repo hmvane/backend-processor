@@ -8,13 +8,9 @@ import json
 # Aseguramos UTF-8
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Obtener ruta absoluta del PDF
+# Argumentos
 file_path = os.path.abspath(sys.argv[1])
-
-# Carpeta temporal segura para Render
-tmp_dir = "/tmp"
-filename = os.path.basename(file_path)
-output_path = os.path.join(tmp_dir, filename.replace(".pdf", ".xlsx"))
+output_path = os.path.abspath(sys.argv[2])  # <- Segundo argumento: path final del Excel
 
 # Leer PDF
 with open(file_path, "rb") as file:
@@ -33,7 +29,7 @@ clean_lines = []
 buffer = ""
 
 for line in lines:
-    if re.match(r"^\d+\s+\d+", line):  # empieza con item + código
+    if re.match(r"^\d+\s+\d+", line):
         if buffer:
             clean_lines.append(buffer)
         buffer = line
@@ -45,7 +41,6 @@ if buffer:
 
 # Procesar datos
 data = []
-
 for line in clean_lines:
     match = re.match(r"(\d+)\s+(\d+)\s+(.+?)\s+([\d\.]+)", line)
     if match:
@@ -60,12 +55,12 @@ for line in clean_lines:
             "Valor": int(valor)
         })
 
-# Crear Excel en /tmp
+# Crear Excel
 df = pd.DataFrame(data)
 df.to_excel(output_path, index=False)
 
-# Imprimir JSON para que Node lo reciba
+# Devolver JSON para frontend
 print(json.dumps(data))
 
-# Debug opcional
+# Debug
 sys.stderr.write(f"Excel guardado en: {output_path}\n")
